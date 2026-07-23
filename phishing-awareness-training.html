@@ -1,0 +1,902 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Inbox Files — Phishing Investigation Field Guide</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#0F1A2B;
+    --surface:#152238;
+    --surface-2:#1C2C48;
+    --paper:#F5F1E6;
+    --paper-line:#E3DCC8;
+    --text:#E9ECF2;
+    --muted:#8FA0B8;
+    --amber:#E8A33D;
+    --amber-dim:rgba(232,163,61,0.15);
+    --red:#D2564A;
+    --red-dim:rgba(210,86,74,0.16);
+    --teal:#4FA695;
+    --teal-dim:rgba(79,166,149,0.16);
+    --line:rgba(233,236,242,0.10);
+    --radius:10px;
+  }
+  *{box-sizing:border-box;}
+  html{scroll-behavior:smooth;}
+  body{
+    margin:0;
+    background:var(--ink);
+    color:var(--text);
+    font-family:'Inter',sans-serif;
+    line-height:1.55;
+    -webkit-font-smoothing:antialiased;
+  }
+  h1,h2,h3{font-family:'Fraunces',serif;font-weight:600;letter-spacing:-0.01em;margin:0;}
+  .mono{font-family:'IBM Plex Mono',monospace;}
+  .eyebrow{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:12px;
+    letter-spacing:0.12em;
+    text-transform:uppercase;
+    color:var(--amber);
+    display:flex;align-items:center;gap:8px;
+    margin-bottom:10px;
+  }
+  .eyebrow::before{content:"";width:16px;height:1px;background:var(--amber);display:inline-block;}
+  a{color:inherit;}
+  button{font-family:inherit;}
+
+  /* ---------- Layout shell ---------- */
+  .app{display:flex;min-height:100vh;}
+  .sidebar{
+    width:270px;flex-shrink:0;
+    background:var(--surface);
+    border-right:1px solid var(--line);
+    padding:28px 20px;
+    position:sticky;top:0;height:100vh;
+    overflow-y:auto;
+  }
+  .brand{margin-bottom:30px;}
+  .brand .mark{
+    display:inline-flex;align-items:center;justify-content:center;
+    width:34px;height:34px;border-radius:50%;
+    background:var(--amber-dim);color:var(--amber);
+    font-family:'IBM Plex Mono',monospace;font-weight:600;font-size:14px;
+    border:1px solid rgba(232,163,61,0.4);
+    margin-bottom:12px;
+  }
+  .brand h1{font-size:20px;line-height:1.2;color:var(--text);}
+  .brand p{margin:6px 0 0;font-size:12.5px;color:var(--muted);}
+
+  .progress-wrap{margin-bottom:24px;}
+  .progress-label{font-size:11px;color:var(--muted);font-family:'IBM Plex Mono',monospace;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px;display:flex;justify-content:space-between;}
+  .progress-track{height:4px;border-radius:2px;background:rgba(255,255,255,0.08);overflow:hidden;}
+  .progress-fill{height:100%;background:linear-gradient(90deg,var(--amber),var(--teal));border-radius:2px;transition:width .4s ease;}
+
+  nav.case-list{display:flex;flex-direction:column;gap:2px;}
+  .case-item{
+    display:flex;align-items:flex-start;gap:10px;
+    padding:10px 10px;border-radius:8px;
+    cursor:pointer;border:1px solid transparent;
+    background:transparent;color:var(--muted);
+    text-align:left;width:100%;
+    transition:background .15s ease, color .15s ease;
+  }
+  .case-item:hover{background:rgba(255,255,255,0.04);color:var(--text);}
+  .case-item.active{background:var(--surface-2);border-color:var(--line);color:var(--text);}
+  .case-item .num{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--amber);padding-top:2px;flex-shrink:0;width:20px;}
+  .case-item .lbl{font-size:13.5px;}
+  .case-item .done{
+    margin-left:auto;width:14px;height:14px;border-radius:50%;
+    border:1px solid var(--teal);flex-shrink:0;margin-top:3px;
+    display:flex;align-items:center;justify-content:center;
+  }
+  .case-item.completed .done{background:var(--teal);}
+  .case-item.completed .done::after{content:"✓";font-size:9px;color:var(--ink);font-weight:700;}
+
+  main{flex:1;min-width:0;padding:56px 60px 90px;max-width:920px;}
+  .panel{display:none;}
+  .panel.active{display:block;animation:fadeIn .35s ease;}
+  @keyframes fadeIn{from{opacity:0;transform:translateY(6px);}to{opacity:1;transform:translateY(0);}}
+
+  .case-title{font-size:34px;margin-bottom:6px;}
+  .case-sub{color:var(--muted);font-size:15px;margin-bottom:34px;max-width:640px;}
+
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:24px 26px;margin-bottom:20px;}
+  .card h3{font-size:17px;margin-bottom:10px;color:var(--text);}
+  .card p{color:var(--muted);font-size:14.5px;margin:0;}
+
+  .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+  @media(max-width:760px){.grid-2{grid-template-columns:1fr;}}
+
+  .tag{
+    display:inline-flex;align-items:center;gap:6px;
+    font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:0.05em;
+    padding:3px 9px;border-radius:20px;text-transform:uppercase;
+  }
+  .tag.red{background:var(--red-dim);color:var(--red);}
+  .tag.amber{background:var(--amber-dim);color:var(--amber);}
+  .tag.teal{background:var(--teal-dim);color:var(--teal);}
+
+  ul.flag-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px;}
+  ul.flag-list li{
+    display:flex;gap:12px;align-items:flex-start;
+    font-size:14.5px;color:var(--text);
+  }
+  ul.flag-list li .dot{
+    width:6px;height:6px;border-radius:50%;background:var(--amber);
+    margin-top:8px;flex-shrink:0;
+  }
+  ul.flag-list li b{color:var(--text);}
+  ul.flag-list li span{color:var(--muted);}
+
+  .btn{
+    background:var(--amber);color:#241704;border:none;
+    padding:12px 22px;border-radius:8px;font-weight:600;font-size:14px;
+    cursor:pointer;transition:transform .15s ease, background .15s ease;
+    display:inline-flex;align-items:center;gap:8px;
+  }
+  .btn:hover{transform:translateY(-1px);background:#f0b158;}
+  .btn.ghost{background:transparent;border:1px solid var(--line);color:var(--text);}
+  .btn.ghost:hover{background:rgba(255,255,255,0.05);}
+  .nav-buttons{display:flex;justify-content:space-between;margin-top:36px;}
+
+  /* ---------- Exhibit: annotated email ---------- */
+  .exhibit-wrap{display:flex;gap:26px;align-items:flex-start;flex-wrap:wrap;}
+  .exhibit{
+    background:var(--paper);color:#2A2A22;border-radius:8px;
+    width:100%;max-width:520px;flex-shrink:0;
+    box-shadow:0 20px 40px rgba(0,0,0,0.35);
+    position:relative;
+  }
+  .exhibit-header{
+    padding:14px 18px;border-bottom:1px solid var(--paper-line);
+    font-family:'IBM Plex Mono',monospace;font-size:11px;color:#8a7f5e;
+    text-transform:uppercase;letter-spacing:0.08em;
+    display:flex;justify-content:space-between;
+  }
+  .exhibit-body{padding:20px 22px 26px;position:relative;}
+  .exhibit-body .field{margin-bottom:10px;font-size:13.5px;position:relative;padding-right:26px;}
+  .exhibit-body .field b{display:inline-block;width:56px;color:#8a7f5e;font-weight:600;font-size:11.5px;text-transform:uppercase;font-family:'IBM Plex Mono',monospace;vertical-align:top;}
+  .exhibit-body .subject{font-size:16px;font-weight:600;margin:14px 0 12px;font-family:'Fraunces',serif;}
+  .exhibit-body .msg{font-size:14px;line-height:1.6;border-top:1px solid var(--paper-line);padding-top:16px;}
+  .exhibit-body .msg .link{color:#2255cc;text-decoration:underline;cursor:default;}
+  .exhibit-body .attachment{
+    margin-top:14px;display:inline-flex;align-items:center;gap:8px;
+    background:#fff;border:1px solid var(--paper-line);border-radius:6px;
+    padding:8px 12px;font-size:12.5px;color:#6b634a;
+  }
+
+  .pin{
+    position:absolute;width:24px;height:24px;border-radius:50%;
+    background:var(--red);color:#fff;font-family:'IBM Plex Mono',monospace;
+    font-size:12px;font-weight:700;border:2px solid var(--paper);
+    display:flex;align-items:center;justify-content:center;cursor:pointer;
+    box-shadow:0 2px 8px rgba(0,0,0,0.35);z-index:5;
+    transition:transform .15s ease;
+  }
+  .pin:hover{transform:scale(1.12);}
+  .pin.found{background:var(--teal);}
+
+  .exhibit-panel{
+    flex:1;min-width:260px;
+    background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);
+    padding:22px;min-height:340px;
+  }
+  .exhibit-panel .placeholder{color:var(--muted);font-size:14px;}
+  .exhibit-panel .found-count{
+    font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--muted);
+    margin-bottom:14px;text-transform:uppercase;letter-spacing:0.06em;
+  }
+  .annotation{display:none;}
+  .annotation.active{display:block;animation:fadeIn .3s ease;}
+  .annotation .flag-title{font-size:15px;font-weight:600;color:var(--red);margin-bottom:8px;display:flex;align-items:center;gap:8px;}
+  .annotation .flag-title .n{
+    width:20px;height:20px;border-radius:50%;background:var(--red);color:#fff;
+    font-family:'IBM Plex Mono',monospace;font-size:11px;display:flex;align-items:center;justify-content:center;
+  }
+  .annotation p{font-size:13.8px;color:var(--muted);margin:0;}
+
+  /* ---------- URL comparison ---------- */
+  .url-compare{display:flex;flex-direction:column;gap:12px;}
+  .url-row{
+    display:flex;align-items:center;gap:12px;
+    background:var(--surface);border:1px solid var(--line);border-radius:8px;
+    padding:14px 16px;
+  }
+  .url-row .verdict{width:64px;flex-shrink:0;text-align:center;}
+  .url-row .bar{
+    font-family:'IBM Plex Mono',monospace;font-size:14px;
+    padding:8px 12px;border-radius:6px;background:rgba(255,255,255,0.03);
+    flex:1;overflow-x:auto;white-space:nowrap;
+  }
+  .url-row.bad .bar .flagpart{color:var(--red);font-weight:700;}
+  .url-row.good .bar{color:var(--teal);}
+
+  /* ---------- Tactic cards ---------- */
+  .tactic-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+  @media(max-width:760px){.tactic-grid{grid-template-columns:1fr;}}
+  .tactic-card{
+    background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);
+    padding:20px 22px;
+  }
+  .tactic-card .tnum{font-family:'IBM Plex Mono',monospace;color:var(--amber);font-size:12px;margin-bottom:8px;display:block;}
+  .tactic-card h3{font-size:16px;margin-bottom:8px;}
+  .tactic-card .scenario{
+    margin-top:12px;padding:12px 14px;border-left:2px solid var(--amber);
+    background:rgba(232,163,61,0.06);font-size:13.3px;color:var(--muted);
+    font-style:italic;
+  }
+
+  /* ---------- Case study ---------- */
+  .case-study{border-left:2px solid var(--red);padding-left:18px;margin-bottom:22px;}
+  .case-study h3{font-size:16.5px;margin-bottom:6px;}
+  .case-study .meta{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--muted);text-transform:uppercase;margin-bottom:8px;}
+
+  /* ---------- Checklist ---------- */
+  .checklist{display:flex;flex-direction:column;gap:10px;}
+  .check-row{display:flex;gap:12px;align-items:flex-start;background:var(--surface);border:1px solid var(--line);padding:14px 16px;border-radius:8px;}
+  .check-row .icon{color:var(--teal);font-size:16px;flex-shrink:0;}
+  .check-row.dont .icon{color:var(--red);}
+  .check-row b{display:block;font-size:14px;margin-bottom:3px;}
+  .check-row span{color:var(--muted);font-size:13.3px;}
+
+  /* ---------- Quiz ---------- */
+  .quiz-progress{display:flex;gap:6px;margin-bottom:26px;}
+  .quiz-progress .seg{flex:1;height:4px;border-radius:2px;background:rgba(255,255,255,0.08);}
+  .quiz-progress .seg.done{background:var(--teal);}
+  .quiz-progress .seg.current{background:var(--amber);}
+
+  .q-card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:28px;}
+  .q-card .q-eyebrow{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--muted);text-transform:uppercase;margin-bottom:10px;}
+  .q-card .q-text{font-size:18px;font-family:'Fraunces',serif;margin-bottom:22px;line-height:1.4;}
+  .options{display:flex;flex-direction:column;gap:10px;}
+  .option{
+    text-align:left;padding:13px 16px;border-radius:8px;
+    border:1px solid var(--line);background:rgba(255,255,255,0.02);
+    color:var(--text);font-size:14.3px;cursor:pointer;
+    display:flex;gap:10px;align-items:flex-start;
+  }
+  .option:hover{background:rgba(255,255,255,0.05);}
+  .option .letter{
+    font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--muted);
+    width:18px;flex-shrink:0;padding-top:1px;
+  }
+  .option.correct{border-color:var(--teal);background:var(--teal-dim);}
+  .option.correct .letter{color:var(--teal);}
+  .option.incorrect{border-color:var(--red);background:var(--red-dim);}
+  .option.incorrect .letter{color:var(--red);}
+  .option.disabled{cursor:default;}
+  .option.dim{opacity:0.45;}
+
+  .feedback{margin-top:18px;padding:14px 16px;border-radius:8px;background:rgba(255,255,255,0.03);font-size:13.8px;color:var(--muted);display:none;}
+  .feedback.show{display:block;animation:fadeIn .3s ease;}
+  .feedback b{color:var(--text);}
+
+  .quiz-nav{display:flex;justify-content:flex-end;margin-top:20px;}
+
+  .results{text-align:center;padding:40px 20px;}
+  .results .score-ring{
+    width:140px;height:140px;border-radius:50%;
+    border:6px solid var(--surface-2);
+    display:flex;align-items:center;justify-content:center;flex-direction:column;
+    margin:0 auto 22px;position:relative;
+  }
+  .results .score-ring .score-num{font-family:'Fraunces',serif;font-size:34px;}
+  .results .score-ring .score-den{font-size:11px;color:var(--muted);font-family:'IBM Plex Mono',monospace;}
+  .results h2{font-size:24px;margin-bottom:10px;}
+  .results p{color:var(--muted);max-width:440px;margin:0 auto 24px;}
+
+  .intro-hero{
+    display:flex;gap:36px;align-items:center;margin-bottom:10px;flex-wrap:wrap;
+  }
+  .intro-hero .stat{
+    background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);
+    padding:18px 20px;min-width:150px;
+  }
+  .intro-hero .stat .num{font-family:'Fraunces',serif;font-size:30px;color:var(--amber);}
+  .intro-hero .stat .lbl{font-size:12px;color:var(--muted);margin-top:2px;}
+
+  footer.page{margin-top:60px;padding-top:20px;border-top:1px solid var(--line);color:var(--muted);font-size:12px;font-family:'IBM Plex Mono',monospace;}
+
+  @media(max-width:900px){
+    .app{flex-direction:column;}
+    .sidebar{width:100%;height:auto;position:relative;}
+    main{padding:36px 22px 70px;}
+  }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- ============ SIDEBAR ============ -->
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="mark">IF</div>
+      <h1>The Inbox Files</h1>
+      <p>A field guide to spotting phishing before it works</p>
+    </div>
+
+    <div class="progress-wrap">
+      <div class="progress-label"><span>Progress</span><span id="progressPct">0%</span></div>
+      <div class="progress-track"><div class="progress-fill" id="progressFill" style="width:0%"></div></div>
+    </div>
+
+    <nav class="case-list" id="caseList">
+      <button class="case-item" data-panel="p0"><span class="num">00</span><span class="lbl">Briefing</span><span class="done"></span></button>
+      <button class="case-item" data-panel="p1"><span class="num">01</span><span class="lbl">What is phishing?</span><span class="done"></span></button>
+      <button class="case-item" data-panel="p2"><span class="num">02</span><span class="lbl">Anatomy of an email</span><span class="done"></span></button>
+      <button class="case-item" data-panel="p3"><span class="num">03</span><span class="lbl">Fake websites</span><span class="done"></span></button>
+      <button class="case-item" data-panel="p4"><span class="num">04</span><span class="lbl">Social engineering</span><span class="done"></span></button>
+      <button class="case-item" data-panel="p5"><span class="num">05</span><span class="lbl">Real-world patterns</span><span class="done"></span></button>
+      <button class="case-item" data-panel="p6"><span class="num">06</span><span class="lbl">Best practices</span><span class="done"></span></button>
+      <button class="case-item" data-panel="p7"><span class="num">07</span><span class="lbl">Knowledge check</span><span class="done"></span></button>
+    </nav>
+  </aside>
+
+  <!-- ============ MAIN ============ -->
+  <main>
+
+    <!-- ---- 00 Briefing ---- -->
+    <section class="panel" id="p0">
+      <div class="eyebrow">Case File 00 — Briefing</div>
+      <h2 class="case-title">Every inbox is a crime scene waiting to happen.</h2>
+      <p class="case-sub">Phishing isn't about being careless — it's about being human. This guide trains your eye to catch the details attackers hope you'll miss, across eight short case files ending in a knowledge check.</p>
+
+      <div class="intro-hero">
+        <div class="stat"><div class="num">90%+</div><div class="lbl">of breaches start with a phishing email reaching someone's inbox</div></div>
+        <div class="stat"><div class="num">3 sec</div><div class="lbl">is roughly how long most people spend deciding whether to click</div></div>
+        <div class="stat"><div class="num">1 click</div><div class="lbl">is all it takes — this guide is about buying yourself a second look</div></div>
+      </div>
+
+      <div class="card">
+        <h3>What you'll walk away with</h3>
+        <p>How to recognize phishing emails and lookalike websites, the social-engineering tactics attackers lean on, a short list of habits that neutralize almost all of it, and a quiz to check it stuck.</p>
+      </div>
+
+      <div class="nav-buttons">
+        <span></span>
+        <button class="btn" onclick="goTo('p1')">Start with Case 01 →</button>
+      </div>
+    </section>
+
+    <!-- ---- 01 What is phishing ---- -->
+    <section class="panel" id="p1">
+      <div class="eyebrow">Case File 01</div>
+      <h2 class="case-title">What is phishing?</h2>
+      <p class="case-sub">Phishing is a message — email, text, call, or chat — designed to trick you into handing over credentials, money, or access by impersonating someone you'd trust.</p>
+
+      <div class="grid-2">
+        <div class="card">
+          <span class="tag amber">Email</span>
+          <h3 style="margin-top:10px;">Phishing</h3>
+          <p>A mass email impersonating a bank, vendor, or internal system, cast wide hoping a small percentage bite.</p>
+        </div>
+        <div class="card">
+          <span class="tag red">Targeted</span>
+          <h3 style="margin-top:10px;">Spear phishing</h3>
+          <p>Personalized to one person or team using real names, projects, or org details — much harder to spot.</p>
+        </div>
+        <div class="card">
+          <span class="tag red">Executive</span>
+          <h3 style="margin-top:10px;">Whaling</h3>
+          <p>Spear phishing aimed at executives or finance staff, often impersonating a CEO requesting an urgent wire transfer.</p>
+        </div>
+        <div class="card">
+          <span class="tag amber">SMS</span>
+          <h3 style="margin-top:10px;">Smishing</h3>
+          <p>The same trick delivered by text message — a fake delivery notice or bank alert with a malicious link.</p>
+        </div>
+        <div class="card">
+          <span class="tag amber">Voice</span>
+          <h3 style="margin-top:10px;">Vishing</h3>
+          <p>A phone call impersonating IT support, a bank, or a government agency to extract information verbally.</p>
+        </div>
+        <div class="card">
+          <span class="tag teal">Reply chain</span>
+          <h3 style="margin-top:10px;">Clone phishing</h3>
+          <p>A near-identical copy of a real email you already received, with the link or attachment swapped for a malicious one.</p>
+        </div>
+      </div>
+
+      <div class="nav-buttons">
+        <button class="btn ghost" onclick="goTo('p0')">← Back</button>
+        <button class="btn" onclick="goTo('p2')">Next: Anatomy of an email →</button>
+      </div>
+    </section>
+
+    <!-- ---- 02 Anatomy — interactive exhibit ---- -->
+    <section class="panel" id="p2">
+      <div class="eyebrow">Case File 02 — Exhibit A</div>
+      <h2 class="case-title">Anatomy of a phishing email</h2>
+      <p class="case-sub">This is a reconstructed example, not a real message. Click each numbered pin to examine what gave it away.</p>
+
+      <div class="exhibit-wrap">
+        <div class="exhibit" id="exhibit">
+          <div class="exhibit-header"><span>Inbox — 1 new message</span><span>Today, 8:47 AM</span></div>
+          <div class="exhibit-body">
+            <div class="field"><b>From</b> IT Support &lt;helpdesk@yourcompany-support.net&gt;
+              <span class="pin" data-flag="1" style="top:-2px;right:0;">1</span>
+            </div>
+            <div class="field"><b>To</b> you@yourcompany.com</div>
+            <div class="subject">URGENT: Your mailbox will be suspended in 24 hours
+              <span class="pin" data-flag="2" style="top:2px;right:-4px;">2</span>
+            </div>
+            <div class="field" style="padding-right:0;"><b>Greeting</b>
+              <span style="margin-left:4px;">Dear Valued User,</span>
+              <span class="pin" data-flag="3" style="top:-4px;left:150px;">3</span>
+            </div>
+            <div class="msg">
+              We detected unusual activity on your account. To avoid permanent suspention of you're mailbox, please verify your identity immediately by clicking the secure link below.
+              <span class="pin" data-flag="4" style="position:relative;top:-2px;">4</span>
+              <br><br>
+              <span class="link">Verify My Account Now</span>
+              <span class="pin" data-flag="5" style="position:relative;top:-2px;">5</span>
+              <br><br>
+              Failure to verify within 24 hours will result in permanent data loss. This is your final notice.
+              <div class="attachment">📎 Account_Verification_Form.zip
+                <span class="pin" data-flag="6" style="position:relative;top:-2px;">6</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="exhibit-panel">
+          <div class="found-count" id="foundCount">0 of 6 flags examined</div>
+          <div id="annotationDefault" class="placeholder">Select a numbered pin on the exhibit to reveal what it tells us.</div>
+          <div class="annotation" data-flag="1">
+            <div class="flag-title"><span class="n">1</span>Spoofed-looking domain</div>
+            <p>"yourcompany-<b>support</b>.net" is not your company's real domain — it just contains its name. Attackers register lookalike domains that survive a quick glance.</p>
+          </div>
+          <div class="annotation" data-flag="2">
+            <div class="flag-title"><span class="n">2</span>Manufactured urgency</div>
+            <p>Threats of suspension, deadlines, and "final notice" language are designed to make you act before you think. Legitimate IT tickets rarely come with a countdown.</p>
+          </div>
+          <div class="annotation" data-flag="3">
+            <div class="flag-title"><span class="n">3</span>Generic greeting</div>
+            <p>"Dear Valued User" instead of your name suggests a mass mailing, not a message from a system that actually knows your account.</p>
+          </div>
+          <div class="annotation" data-flag="4">
+            <div class="flag-title"><span class="n">4</span>Spelling and grammar slips</div>
+            <p>"Suspention" and "you're mailbox" are the kind of small errors that a real corporate IT notice — usually templated and proofread — wouldn't contain.</p>
+          </div>
+          <div class="annotation" data-flag="5">
+            <div class="flag-title"><span class="n">5</span>Disguised link text</div>
+            <p>The visible words "Verify My Account Now" hide the actual destination URL. Always hover (don't click) to see where a link really points before trusting it.</p>
+          </div>
+          <div class="annotation" data-flag="6">
+            <div class="flag-title"><span class="n">6</span>Unexpected attachment</div>
+            <p>A .zip labeled as a "verification form" is a classic malware delivery method. Legitimate identity verification never requires downloading an executable archive.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="nav-buttons">
+        <button class="btn ghost" onclick="goTo('p1')">← Back</button>
+        <button class="btn" onclick="goTo('p3')">Next: Fake websites →</button>
+      </div>
+    </section>
+
+    <!-- ---- 03 Fake websites ---- -->
+    <section class="panel" id="p3">
+      <div class="eyebrow">Case File 03</div>
+      <h2 class="case-title">Fake websites</h2>
+      <p class="case-sub">A phishing email's job is just to get you to click. The real trap is usually the site on the other end, built to look identical to one you already trust.</p>
+
+      <div class="card">
+        <h3>Read the URL right to left</h3>
+        <p>The part that matters most — the actual domain — sits directly before the first single slash. Everything to the left of it can be faked.</p>
+      </div>
+
+      <div class="url-compare">
+        <div class="url-row good">
+          <div class="verdict"><span class="tag teal">Real</span></div>
+          <div class="bar">https://accounts.yourbank.com/login</div>
+        </div>
+        <div class="url-row bad">
+          <div class="verdict"><span class="tag red">Fake</span></div>
+          <div class="bar">https://yourbank.com<span class="flagpart">.verify-secure.io</span>/login</div>
+        </div>
+        <div class="url-row bad">
+          <div class="verdict"><span class="tag red">Fake</span></div>
+          <div class="bar">https://<span class="flagpart">yourbank-online.com</span>/login</div>
+        </div>
+        <div class="url-row bad">
+          <div class="verdict"><span class="tag red">Fake</span></div>
+          <div class="bar">https://<span class="flagpart">yourbahk.com</span>/login</div>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:20px;">
+        <h3>The padlock icon isn't a trust seal</h3>
+        <p>HTTPS and the padlock only mean the connection is encrypted — attackers get free certificates too. A padlock tells you no one can eavesdrop on the connection; it says nothing about who owns the site.</p>
+      </div>
+
+      <ul class="flag-list" style="margin-top:20px;">
+        <li><div class="dot"></div><div><b>Typosquatting</b> — <span>domains one letter off from the real one (yourbahk.com), easy to miss at a glance.</span></div></li>
+        <li><div class="dot"></div><div><b>Subdomain tricks</b> — <span>real-looking brand name placed as a subdomain of an unrelated domain.</span></div></li>
+        <li><div class="dot"></div><div><b>Pixel-perfect clones</b> — <span>copied logos, layout, and fonts — visual polish is not proof of legitimacy.</span></div></li>
+        <li><div class="dot"></div><div><b>Missing or broken pages</b> — <span>privacy policy, "about us", or footer links that go nowhere are a tell on hastily-built fake sites.</span></div></li>
+        <li><div class="dot"></div><div><b>Unusual login requests</b> — <span>being asked for a password on a page you didn't navigate to directly.</span></div></li>
+      </ul>
+
+      <div class="nav-buttons">
+        <button class="btn ghost" onclick="goTo('p2')">← Back</button>
+        <button class="btn" onclick="goTo('p4')">Next: Social engineering →</button>
+      </div>
+    </section>
+
+    <!-- ---- 04 Social engineering ---- -->
+    <section class="panel" id="p4">
+      <div class="eyebrow">Case File 04</div>
+      <h2 class="case-title">Social engineering tactics</h2>
+      <p class="case-sub">Phishing is social engineering delivered by email. The technology is almost incidental — the real exploit is a handful of predictable psychological levers.</p>
+
+      <div class="tactic-grid">
+        <div class="tactic-card">
+          <span class="tnum">Lever 01</span>
+          <h3>Authority</h3>
+          <p>Impersonating a boss, executive, or official body so the request feels risky to question.</p>
+          <div class="scenario">"This is the CEO — I need you to purchase gift cards for a client and send me the codes before my flight boards."</div>
+        </div>
+        <div class="tactic-card">
+          <span class="tnum">Lever 02</span>
+          <h3>Urgency</h3>
+          <p>A deadline or threat that discourages the pause needed to verify.</p>
+          <div class="scenario">"Your access will be revoked in 1 hour unless you confirm your credentials now."</div>
+        </div>
+        <div class="tactic-card">
+          <span class="tnum">Lever 03</span>
+          <h3>Fear</h3>
+          <p>Warning of a consequence — a fine, a security breach, legal trouble — to short-circuit careful thinking.</p>
+          <div class="scenario">"We've detected suspicious sign-in attempts on your account from another country."</div>
+        </div>
+        <div class="tactic-card">
+          <span class="tnum">Lever 04</span>
+          <h3>Familiarity</h3>
+          <p>Referencing real coworkers, projects, or recent events, often scraped from a public profile or a prior breach.</p>
+          <div class="scenario">"Following up on the Q3 budget doc you shared — can you re-send it to this address?"</div>
+        </div>
+        <div class="tactic-card">
+          <span class="tnum">Lever 05</span>
+          <h3>Reciprocity &amp; curiosity</h3>
+          <p>A prize, refund, or intriguing attachment that offers something in exchange for a click.</p>
+          <div class="scenario">"You're eligible for a $50 refund from a recent order — claim it here."</div>
+        </div>
+        <div class="tactic-card">
+          <span class="tnum">Lever 06</span>
+          <h3>Pretexting</h3>
+          <p>A fabricated scenario — an IT ticket, a vendor invoice, an HR request — built to justify an unusual ask.</p>
+          <div class="scenario">A caller claiming to be from IT asks you to "confirm" your password to close out a support ticket you never opened.</div>
+        </div>
+      </div>
+
+      <div class="nav-buttons">
+        <button class="btn ghost" onclick="goTo('p3')">← Back</button>
+        <button class="btn" onclick="goTo('p5')">Next: Real-world patterns →</button>
+      </div>
+    </section>
+
+    <!-- ---- 05 Real-world patterns ---- -->
+    <section class="panel" id="p5">
+      <div class="eyebrow">Case File 05</div>
+      <h2 class="case-title">Real-world patterns</h2>
+      <p class="case-sub">These are the recurring templates behind most reported incidents — the details change, the shape doesn't.</p>
+
+      <div class="case-study">
+        <div class="meta">Pattern · Business Email Compromise</div>
+        <h3>The "urgent wire transfer"</h3>
+        <p style="color:var(--muted);font-size:14px;margin:0;">An attacker compromises or spoofs an executive's email and asks finance staff to process an unusual, time-sensitive payment or gift card purchase — deliberately routed around normal approval channels. This pattern has cost organizations billions of dollars globally and remains one of the costliest phishing categories precisely because it targets a process, not just a person.</p>
+      </div>
+
+      <div class="case-study">
+        <div class="meta">Pattern · Credential Harvesting</div>
+        <h3>The "fake login page"</h3>
+        <p style="color:var(--muted);font-size:14px;margin:0;">A cloned sign-in page for a common productivity or file-sharing tool is sent under the guise of a shared document notification. The victim enters real credentials, which are captured instantly and often replayed within minutes.</p>
+      </div>
+
+      <div class="case-study">
+        <div class="meta">Pattern · Vendor / Invoice Fraud</div>
+        <h3>The "updated bank details"</h3>
+        <p style="color:var(--muted);font-size:14px;margin:0;">A message impersonating a known supplier asks accounts payable to update the bank details on file "before the next invoice." Future legitimate-looking invoices then route funds to the attacker.</p>
+      </div>
+
+      <div class="case-study">
+        <div class="meta">Pattern · Delivery / Package Scam</div>
+        <h3>The "missed delivery" text</h3>
+        <p style="color:var(--muted);font-size:14px;margin:0;">A smishing text claims a package couldn't be delivered and links to a page requesting a small "redelivery fee," harvesting card details rather than any real shipment.</p>
+      </div>
+
+      <div class="nav-buttons">
+        <button class="btn ghost" onclick="goTo('p4')">← Back</button>
+        <button class="btn" onclick="goTo('p6')">Next: Best practices →</button>
+      </div>
+    </section>
+
+    <!-- ---- 06 Best practices ---- -->
+    <section class="panel" id="p6">
+      <div class="eyebrow">Case File 06</div>
+      <h2 class="case-title">Best practices</h2>
+      <p class="case-sub">You don't need to catch every technical detail. A handful of habits neutralize almost all of it.</p>
+
+      <div class="checklist">
+        <div class="check-row"><div class="icon">✓</div><div><b>Verify through a second channel</b><span>Got an urgent request by email? Call the person using a number you already had — not one from the message.</span></div></div>
+        <div class="check-row"><div class="icon">✓</div><div><b>Hover before you click</b><span>Check where a link actually goes before trusting the visible text.</span></div></div>
+        <div class="check-row"><div class="icon">✓</div><div><b>Go to the site yourself</b><span>Type the known address directly or use a saved bookmark instead of clicking through an email.</span></div></div>
+        <div class="check-row"><div class="icon">✓</div><div><b>Slow down under pressure</b><span>Urgency is the tactic, not a reason to skip verification — legitimate requests survive a pause.</span></div></div>
+        <div class="check-row"><div class="icon">✓</div><div><b>Use multi-factor authentication</b><span>MFA means a stolen password alone usually isn't enough to get in.</span></div></div>
+        <div class="check-row"><div class="icon">✓</div><div><b>Report it</b><span>Forward suspicious messages to your security or IT team — one report can protect the whole organization.</span></div></div>
+        <div class="check-row dont"><div class="icon">✕</div><div><b>Don't reuse passwords</b><span>A credential leaked from one phished site shouldn't unlock every other account.</span></div></div>
+        <div class="check-row dont"><div class="icon">✕</div><div><b>Don't trust caller ID or display names alone</b><span>Both can be spoofed convincingly — they're not proof of identity.</span></div></div>
+      </div>
+
+      <div class="nav-buttons">
+        <button class="btn ghost" onclick="goTo('p5')">← Back</button>
+        <button class="btn" onclick="goTo('p7')">Take the knowledge check →</button>
+      </div>
+    </section>
+
+    <!-- ---- 07 Quiz ---- -->
+    <section class="panel" id="p7">
+      <div class="eyebrow">Case File 07 — Final</div>
+      <h2 class="case-title">Knowledge check</h2>
+      <p class="case-sub">Eight questions. You'll see the right answer and a short explanation after each one.</p>
+
+      <div id="quizArea">
+        <div class="quiz-progress" id="quizProgress"></div>
+        <div class="q-card" id="qCard"></div>
+        <div class="quiz-nav"><button class="btn" id="quizNextBtn" style="display:none;" onclick="nextQuestion()">Next question →</button></div>
+      </div>
+
+      <div id="resultsArea" style="display:none;" class="results">
+        <div class="score-ring"><div class="score-num" id="scoreNum">0</div><div class="score-den">OUT OF 8</div></div>
+        <h2 id="resultTitle">Nice work</h2>
+        <p id="resultMsg"></p>
+        <button class="btn" onclick="restartQuiz()">Retake the quiz</button>
+      </div>
+
+      <div class="nav-buttons">
+        <button class="btn ghost" onclick="goTo('p6')">← Back</button>
+        <span></span>
+      </div>
+    </section>
+
+    <footer class="page">THE INBOX FILES — INTERNAL SECURITY AWARENESS TRAINING · FOR EDUCATIONAL USE</footer>
+  </main>
+</div>
+
+<script>
+/* ---------------- Navigation ---------------- */
+const panelOrder = ['p0','p1','p2','p3','p4','p5','p6','p7'];
+const completed = new Set();
+
+function goTo(id){
+  document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  document.querySelectorAll('.case-item').forEach(b=>b.classList.remove('active'));
+  document.querySelector(`.case-item[data-panel="${id}"]`).classList.add('active');
+  const prevIndex = panelOrder.indexOf(id) - 1;
+  if(prevIndex >= 0) completed.add(panelOrder[prevIndex]);
+  updateProgress();
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+
+function updateProgress(){
+  document.querySelectorAll('.case-item').forEach(b=>{
+    b.classList.toggle('completed', completed.has(b.dataset.panel));
+  });
+  const pct = Math.round((completed.size/(panelOrder.length-1))*100);
+  document.getElementById('progressFill').style.width = pct+'%';
+  document.getElementById('progressPct').textContent = pct+'%';
+}
+
+document.querySelectorAll('.case-item').forEach(btn=>{
+  btn.addEventListener('click', ()=>goTo(btn.dataset.panel));
+});
+goTo('p0');
+
+/* ---------------- Exhibit hotspots ---------------- */
+const foundFlags = new Set();
+document.querySelectorAll('.pin').forEach(pin=>{
+  pin.addEventListener('click', ()=>{
+    const flag = pin.dataset.flag;
+    foundFlags.add(flag);
+    pin.classList.add('found');
+    document.getElementById('annotationDefault').style.display='none';
+    document.querySelectorAll('.annotation').forEach(a=>a.classList.remove('active'));
+    document.querySelector(`.annotation[data-flag="${flag}"]`).classList.add('active');
+    document.getElementById('foundCount').textContent = `${foundFlags.size} of 6 flags examined`;
+  });
+});
+
+/* ---------------- Quiz ---------------- */
+const questions = [
+  {
+    q:"An email from \"payroll-team@yourcompany.hr-secure.com\" asks you to confirm your direct deposit details. What's the strongest red flag?",
+    options:[
+      "The email arrived in the morning",
+      "The domain isn't your company's actual domain — it just contains familiar words",
+      "It's addressed to you by name",
+      "It uses your company's logo"
+    ],
+    correct:1,
+    explain:"Real brand names or department words stitched into an unrelated domain is one of the most common lookalike tricks — check what comes right before the first single slash, not just whether familiar words appear somewhere in the address."
+  },
+  {
+    q:"You get a text saying a package couldn't be delivered and asks for a small fee via a link. What should you do first?",
+    options:[
+      "Pay the fee since it's a small amount",
+      "Click the link to see which package it's about",
+      "Go directly to the carrier's official app or site to check delivery status",
+      "Reply STOP to the number"
+    ],
+    correct:2,
+    explain:"Checking status through a channel you navigated to yourself avoids the fake page entirely, regardless of how convincing the text looks."
+  },
+  {
+    q:"A message claiming to be your CEO asks you to urgently buy gift cards and send the codes. This is a textbook example of which tactic?",
+    options:[
+      "Typosquatting",
+      "Authority + urgency",
+      "Clone phishing",
+      "Two-factor bypass"
+    ],
+    correct:1,
+    explain:"Impersonating someone senior (authority) combined with a tight deadline (urgency) is one of the most common combinations in business email compromise."
+  },
+  {
+    q:"Which of these is true about the padlock icon / HTTPS in a browser address bar?",
+    options:[
+      "It guarantees the site is legitimate",
+      "It means the connection is encrypted, but says nothing about who owns the site",
+      "Only real companies can get an HTTPS certificate",
+      "It means the site has been reviewed by your browser vendor"
+    ],
+    correct:1,
+    explain:"HTTPS certificates are free and easy to obtain — attackers use them routinely. Encryption protects the connection, not your judgment about who's on the other end."
+  },
+  {
+    q:"What's the safest way to check where a link in an email actually goes, without clicking it?",
+    options:[
+      "Read the link text out loud",
+      "Hover over it and look at the destination shown by your browser or email client",
+      "Forward it to a coworker to click first",
+      "Check if the email has a company logo"
+    ],
+    correct:1,
+    explain:"Hovering reveals the real destination URL, which is often completely different from the clickable text shown."
+  },
+  {
+    q:"A caller claiming to be from IT asks you to \"confirm\" your password to close a support ticket. What should you do?",
+    options:[
+      "Give a slightly wrong password to test them",
+      "Provide it since IT already has access anyway",
+      "Decline, and independently contact IT through a known number or channel to verify",
+      "Ask them to email you instead"
+    ],
+    correct:2,
+    explain:"Legitimate IT support never needs your actual password. Verifying independently, through contact info you already trust, defeats vishing and pretexting regardless of how convincing the caller sounds."
+  },
+  {
+    q:"Why is multi-factor authentication (MFA) recommended as a defense against phishing?",
+    options:[
+      "It prevents phishing emails from being sent to you",
+      "It makes a stolen password alone insufficient to access your account",
+      "It blocks fake websites automatically",
+      "It removes the need to check links"
+    ],
+    correct:1,
+    explain:"MFA doesn't stop a phishing attempt from arriving, but it significantly limits the damage if credentials are ever captured."
+  },
+  {
+    q:"You receive a phishing email at work. What's the best next step?",
+    options:[
+      "Delete it immediately and say nothing",
+      "Reply to the sender asking them to stop",
+      "Report/forward it to your security or IT team",
+      "Click the link to see what it does out of curiosity"
+    ],
+    correct:2,
+    explain:"Reporting lets your security team block the sender, warn others, and identify if anyone else already clicked — a single report can protect the whole organization."
+  }
+];
+
+let currentQ = 0;
+let score = 0;
+let answered = false;
+
+function renderProgress(){
+  const wrap = document.getElementById('quizProgress');
+  wrap.innerHTML = '';
+  questions.forEach((_,i)=>{
+    const seg = document.createElement('div');
+    seg.className = 'seg' + (i<currentQ?' done':'') + (i===currentQ?' current':'');
+    wrap.appendChild(seg);
+  });
+}
+
+function renderQuestion(){
+  answered = false;
+  renderProgress();
+  const q = questions[currentQ];
+  const card = document.getElementById('qCard');
+  card.innerHTML = `
+    <div class="q-eyebrow">Question ${currentQ+1} of ${questions.length}</div>
+    <div class="q-text">${q.q}</div>
+    <div class="options" id="optionsWrap"></div>
+    <div class="feedback" id="feedback"></div>
+  `;
+  const optWrap = document.getElementById('optionsWrap');
+  const letters = ['A','B','C','D'];
+  q.options.forEach((opt,i)=>{
+    const btn = document.createElement('button');
+    btn.className='option';
+    btn.innerHTML = `<span class="letter">${letters[i]}</span><span>${opt}</span>`;
+    btn.addEventListener('click', ()=>selectAnswer(i));
+    optWrap.appendChild(btn);
+  });
+  document.getElementById('quizNextBtn').style.display='none';
+}
+
+function selectAnswer(i){
+  if(answered) return;
+  answered = true;
+  const q = questions[currentQ];
+  const opts = document.querySelectorAll('#optionsWrap .option');
+  opts.forEach((o,idx)=>{
+    o.classList.add('disabled');
+    if(idx===q.correct) o.classList.add('correct');
+    else if(idx===i) o.classList.add('incorrect');
+    else o.classList.add('dim');
+  });
+  if(i===q.correct) score++;
+  const fb = document.getElementById('feedback');
+  fb.classList.add('show');
+  fb.innerHTML = `<b>${i===q.correct? 'Correct.' : 'Not quite.'}</b> ${q.explain}`;
+  document.getElementById('quizNextBtn').style.display='inline-flex';
+  document.getElementById('quizNextBtn').textContent = currentQ === questions.length-1 ? 'See results →' : 'Next question →';
+}
+
+function nextQuestion(){
+  currentQ++;
+  if(currentQ >= questions.length){
+    showResults();
+  } else {
+    renderQuestion();
+  }
+}
+
+function showResults(){
+  document.getElementById('quizArea').style.display='none';
+  document.getElementById('resultsArea').style.display='block';
+  document.getElementById('scoreNum').textContent = score;
+  const title = document.getElementById('resultTitle');
+  const msg = document.getElementById('resultMsg');
+  if(score >= 7){
+    title.textContent = "Sharp eye.";
+    msg.textContent = "You're catching the details that matter. Keep verifying through a second channel when something feels off — that instinct is the whole job.";
+  } else if(score >= 5){
+    title.textContent = "Solid start.";
+    msg.textContent = "You've got the core instincts. Revisit the case files on the tactics you missed, then try again.";
+  } else {
+    title.textContent = "Worth another pass.";
+    msg.textContent = "Phishing gets more convincing every year — a second look at the earlier case files will make the patterns click.";
+  }
+  completed.add('p7');
+  updateProgress();
+}
+
+function restartQuiz(){
+  currentQ = 0; score = 0;
+  document.getElementById('resultsArea').style.display='none';
+  document.getElementById('quizArea').style.display='block';
+  renderQuestion();
+}
+
+renderQuestion();
+</script>
+</body>
+</html>
